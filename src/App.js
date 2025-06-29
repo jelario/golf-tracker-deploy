@@ -1,39 +1,44 @@
-import React, { useState, useEffect } from "react";
-import { db } from "./firebase";
-import { collection, addDoc, getDocs } from "firebase/firestore";
+import React, { useState, useEffect } from 'react';
+import { db } from './firebase';
+import { ref, push, onValue } from 'firebase/database';
+import './App.css';
 
 function App() {
+  const [machineName, setMachineName] = useState('');
   const [machines, setMachines] = useState([]);
-  const [newMachine, setNewMachine] = useState("");
 
   useEffect(() => {
-    const fetchMachines = async () => {
-      const snapshot = await getDocs(collection(db, "machines"));
-      setMachines(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    };
-    fetchMachines();
+    const machinesRef = ref(db, 'machines');
+    onValue(machinesRef, (snapshot) => {
+      const data = snapshot.val();
+      const loadedMachines = [];
+      for (let id in data) {
+        loadedMachines.push({ id, name: data[id].name });
+      }
+      setMachines(loadedMachines);
+    });
   }, []);
 
-  const addMachine = async () => {
-    if (newMachine.trim()) {
-      const docRef = await addDoc(collection(db, "machines"), { name: newMachine });
-      setMachines([...machines, { id: docRef.id, name: newMachine }]);
-      setNewMachine("");
-    }
+  const handleAddMachine = () => {
+    if (machineName.trim() === '') return;
+    const machinesRef = ref(db, 'machines');
+    push(machinesRef, { name: machineName });
+    setMachineName('');
   };
 
   return (
-    <div style={{ padding: "20px" }}>
+    <div className="App">
       <h1>Golf Course Equipment Tracker</h1>
       <input
-        value={newMachine}
-        onChange={(e) => setNewMachine(e.target.value)}
+        type="text"
+        value={machineName}
+        onChange={(e) => setMachineName(e.target.value)}
         placeholder="Add new machine"
       />
-      <button onClick={addMachine}>Add</button>
+      <button onClick={handleAddMachine}>Add</button>
       <ul>
-        {machines.map((m) => (
-          <li key={m.id}>{m.name}</li>
+        {machines.map((machine) => (
+          <li key={machine.id}>{machine.name}</li>
         ))}
       </ul>
     </div>
