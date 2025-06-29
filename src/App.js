@@ -1,107 +1,101 @@
 import React, { useState, useEffect } from 'react';
 import { db } from './firebase';
-import { ref, push, onValue, update } from 'firebase/database';
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  orderBy
+} from 'firebase/firestore';
+import './App.css';
 
 function App() {
   const [machines, setMachines] = useState([]);
   const [newMachineName, setNewMachineName] = useState('');
   const [newMachineNotes, setNewMachineNotes] = useState('');
-  const [newMachineReminder, setNewMachineReminder] = useState('');
+  const [newMachineDate, setNewMachineDate] = useState('');
 
   useEffect(() => {
-    const machinesRef = ref(db, 'machines');
-    onValue(machinesRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const machinesArray = Object.keys(data).map((key) => ({
-          id: key,
-          ...data[key],
-        }));
-        setMachines(machinesArray);
-      } else {
-        setMachines([]);
-      }
+    const q = query(collection(db, 'machines'), orderBy('nextMaintenanceDate', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const machinesData = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      }));
+      setMachines(machinesData);
     });
+    return unsubscribe;
   }, []);
 
-  const handleAddMachine = () => {
-    if (newMachineName.trim() === '') return;
-    push(ref(db, 'machines'), {
+  const handleAddMachine = async () => {
+    if (!newMachineName.trim()) return;
+    await addDoc(collection(db, 'machines'), {
       name: newMachineName,
       notes: newMachineNotes,
-      reminderDate: newMachineReminder,
+      nextMaintenanceDate: newMachineDate || '',
     });
     setNewMachineName('');
     setNewMachineNotes('');
-    setNewMachineReminder('');
+    setNewMachineDate('');
   };
 
-  const handleNotesChange = (id, notes) => {
-    update(ref(db, `machines/${id}`), { notes });
+  const handleUpdateMachine = async (id, field, value) => {
+    const machineRef = doc(db, 'machines', id);
+    await updateDoc(machineRef, { [field]: value });
   };
 
-  const handleReminderChange = (id, reminderDate) => {
-    update(ref(db, `machines/${id}`), { reminderDate });
+  const handleDeleteMachine = async (id) => {
+    const machineRef = doc(db, 'machines', id);
+    await deleteDoc(machineRef);
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '600px', margin: 'auto' }}>
-      <h2>Golf Course Equipment Tracker</h2>
+    <div className="App">
+      <h1>Golf Course Equipment Tracker</h1>
       <input
         type="text"
         placeholder="Add new machine"
         value={newMachineName}
         onChange={(e) => setNewMachineName(e.target.value)}
-        style={{ width: '100%', marginBottom: '8px', padding: '8px' }}
       />
       <textarea
         placeholder="Add notes (optional)"
         value={newMachineNotes}
         onChange={(e) => setNewMachineNotes(e.target.value)}
-        style={{ width: '100%', marginBottom: '8px', padding: '8px' }}
       />
       <input
         type="date"
-        value={newMachineReminder}
-        onChange={(e) => setNewMachineReminder(e.target.value)}
-        style={{ width: '100%', marginBottom: '8px', padding: '8px' }}
+        value={newMachineDate}
+        onChange={(e) => setNewMachineDate(e.target.value)}
       />
-      <button onClick={handleAddMachine} style={{ padding: '10px', width: '100%' }}>
-        Add Machine
-      </button>
+      <button onClick={handleAddMachine}>Add Machine</button>
 
-      <ul style={{ listStyle: 'none', padding: 0, marginTop: '20px' }}>
-        {machines.map((machine) => (
-          <li
-            key={machine.id}
-            style={{
-              border: '1px solid #ccc',
-              borderRadius: '8px',
-              padding: '10px',
-              marginBottom: '10px',
-            }}
-          >
-            <strong>{machine.name}</strong>
-            <div>
-              <textarea
-                value={machine.notes || ''}
-                placeholder="Add or edit notes"
-                onChange={(e) => handleNotesChange(machine.id, e.target.value)}
-                style={{ width: '100%', marginTop: '8px', padding: '8px' }}
-              />
-            </div>
-            <div style={{ marginTop: '8px' }}>
-              <label>Next Maintenance: </label>
-              <input
-                type="date"
-                value={machine.reminderDate || ''}
-                onChange={(e) => handleReminderChange(machine.id, e.target.value)}
-                style={{ padding: '6px', width: '50%' }}
-              />
-            </div>
-          </li>
-        ))}
-      </ul>
+      {machines.map((machine) => (
+        <div key={machine.id} style={{ border: '1px solid #ccc', margin: '10px', padding: '10px' }}>
+          <input
+            type="text"
+            value={machine.name}
+            onChange={(e) => handleUpdateMachine(machine.id, 'name', e.target.value)}
+          />
+          <textarea
+            placeholder="Add or edit notes"
+            value={machine.notes}
+            onChange={(e) => handleUpdateMachine(machine.id, 'notes', e.target.value)}
+          />
+          <div>
+            Next Maintenance:{' '}
+            <input
+              type="date"
+              value={machine.nextMaintenanceDate || ''}
+              onChange={(e) => handleUpdateMachine(machine.id, 'nextMaintenanceDate', e.target.value)}
+            />
+          </div>
+          <button onClick={() => handleDeleteMachine(machine.id)}>Delete</button>
+        </div>
+      ))}
     </div>
   );
 }
